@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "injekta"
-version = "0.0.0"
+version = "0.1.0"
 description = "A lightweight, type-safe dependency injection library inspired by FastAPI's Depends."
 authors = ["Thalison Fernandes <thalissfernandes99@gmail.com>"]
 readme = "README.md"
