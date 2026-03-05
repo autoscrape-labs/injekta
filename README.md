@@ -231,6 +231,10 @@ def handler(repo: UserRepository = Needs(get_user_repo)):
 
 Understanding how injekta manages instance lifetime avoids surprises.
 
+### Signature analysis is cached
+
+`@inject` analyzes the function signature **once at decoration time** and caches the dependency tree. Subsequent calls skip all introspection and go straight to resolution. This means there is zero reflection overhead per call.
+
 ### Factory functions (`Needs`)
 
 Every call to the injected function re-executes the factory from scratch. There is no implicit caching between calls:
