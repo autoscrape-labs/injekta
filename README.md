@@ -271,6 +271,16 @@ def handler(
 handler()  # get_config runs once, result shared by get_db and get_cache
 ```
 
+```mermaid
+graph TD
+    handler --> get_db
+    handler --> get_cache
+    get_db --> get_config
+    get_cache --> get_config
+```
+
+> `get_config` is resolved once. The same instance is injected into both `get_db` and `get_cache`.
+
 ### Container: singletons vs factories
 
 `Container.register` auto-detects the strategy based on what you pass:
