@@ -271,6 +271,16 @@ def make_cache() -> RedisCache:
 container.register(Cache, make_cache)
 ```
 
+Factories can also be decorated with `@inject` to receive their own dependencies:
+
+```python
+@inject
+def make_service(db: Annotated[Database, container.Needs(Database)]) -> UserService:
+    return UserService(db)
+
+container.register(UserService, make_service)
+```
+
 If you need a singleton, instantiate it yourself and register the instance. If you need a fresh object every time, register a class, lambda, or function.
 
 ## Mixing styles
@@ -291,23 +301,26 @@ def handler(
 
 ## Testing
 
-Replace dependencies easily in tests. Use a fresh container per test to avoid shared state:
+Use `container.override` to swap dependencies in tests. The original registration is restored automatically when the context exits:
 
 ```python
 def test_create_user():
-    test_container = Container()
     fake_db = FakeDB()
-    test_container.register(Database, fake_db)
 
-    @inject
-    def handler(db: Annotated[Database, test_container.Needs(Database)], name: str):
-        db.execute(f"INSERT {name}")
-        return name
-
-    result = handler(name="John")
+    with container.override(Database, fake_db):
+        result = handler(name="John")
 
     assert result == "John"
     assert fake_db.last_query == "INSERT John"
+```
+
+Overrides are safe against exceptions and support nesting:
+
+```python
+def test_with_nested_overrides():
+    with container.override(Database, FakeDB()):
+        with container.override(Logger, FakeLogger()):
+            result = handler(name="John")
 ```
 
 Or bypass injection entirely by passing dependencies directly:
