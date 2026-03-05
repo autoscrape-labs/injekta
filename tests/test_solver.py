@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator, Generator
+from contextlib import AsyncExitStack, ExitStack
 
 import pytest
 
@@ -161,6 +162,32 @@ class TestYieldDependenciesSync:
         with pytest.raises(InjectionError, match='async dependency.*sync context'):
             solve_dependencies_sync(dependant)
 
+    def test_propagates_teardown_exception(self) -> None:
+        def get_db() -> Generator[str]:
+            yield 'db'
+            raise RuntimeError('teardown failed')
+
+        def handler(db: str = Needs(get_db)) -> None: ...
+
+        dependant = resolve_dependencies(handler)
+
+        with pytest.raises(RuntimeError, match='teardown failed'):
+            with ExitStack() as stack:
+                solve_dependencies_sync(dependant, _exit_stack=stack)
+
+    def test_raises_on_multiple_yields(self) -> None:
+        def get_db() -> Generator[str]:
+            yield 'first'
+            yield 'second'
+
+        def handler(db: str = Needs(get_db)) -> None: ...
+
+        dependant = resolve_dependencies(handler)
+
+        with pytest.raises(InjectionError, match='yielded more than once'):
+            with ExitStack() as stack:
+                solve_dependencies_sync(dependant, _exit_stack=stack)
+
 
 class TestYieldDependenciesAsync:
     @pytest.mark.asyncio
@@ -186,3 +213,59 @@ class TestYieldDependenciesAsync:
         values = await solve_dependencies(dependant)
 
         assert values == {'db': 'async_db_connection'}
+
+    @pytest.mark.asyncio
+    async def test_propagates_sync_generator_teardown_exception(self) -> None:
+        def get_db() -> Generator[str]:
+            yield 'db'
+            raise RuntimeError('sync teardown failed')
+
+        def handler(db: str = Needs(get_db)) -> None: ...
+
+        dependant = resolve_dependencies(handler)
+
+        with pytest.raises(RuntimeError, match='sync teardown failed'):
+            async with AsyncExitStack() as stack:
+                await solve_dependencies(dependant, _exit_stack=stack)
+
+    @pytest.mark.asyncio
+    async def test_propagates_async_generator_teardown_exception(self) -> None:
+        async def get_db() -> AsyncGenerator[str]:
+            yield 'db'
+            raise RuntimeError('async teardown failed')
+
+        def handler(db: str = Needs(get_db)) -> None: ...
+
+        dependant = resolve_dependencies(handler)
+
+        with pytest.raises(RuntimeError, match='async teardown failed'):
+            async with AsyncExitStack() as stack:
+                await solve_dependencies(dependant, _exit_stack=stack)
+
+    @pytest.mark.asyncio
+    async def test_raises_on_sync_generator_multiple_yields(self) -> None:
+        def get_db() -> Generator[str]:
+            yield 'first'
+            yield 'second'
+
+        def handler(db: str = Needs(get_db)) -> None: ...
+
+        dependant = resolve_dependencies(handler)
+
+        with pytest.raises(InjectionError, match='yielded more than once'):
+            async with AsyncExitStack() as stack:
+                await solve_dependencies(dependant, _exit_stack=stack)
+
+    @pytest.mark.asyncio
+    async def test_raises_on_async_generator_multiple_yields(self) -> None:
+        async def get_db() -> AsyncGenerator[str]:
+            yield 'first'
+            yield 'second'
+
+        def handler(db: str = Needs(get_db)) -> None: ...
+
+        dependant = resolve_dependencies(handler)
+
+        with pytest.raises(InjectionError, match='yielded more than once'):
+            async with AsyncExitStack() as stack:
+                await solve_dependencies(dependant, _exit_stack=stack)
