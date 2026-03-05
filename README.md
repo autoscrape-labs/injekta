@@ -11,7 +11,7 @@
 
 
 <p align="center">
-    <a href="#quick-start">Getting Started</a> · <a href="#four-ways-to-declare-dependencies">Features</a> · <a href="#scoping-and-lifecycle">Lifecycle</a> · <a href="#testing">Testing</a> · <a href="#license">License</a>
+    <a href="#quick-start">Getting Started</a> · <a href="#four-ways-to-declare-dependencies">Features</a> · <a href="#scoping-and-lifecycle">Lifecycle</a> · <a href="#error-handling">Errors</a> · <a href="#testing">Testing</a> · <a href="#license">License</a>
 </p>
 
 ## Install
@@ -327,6 +327,46 @@ def handler(
     ...
 ```
 
+## Error handling
+
+injekta raises clear, specific exceptions when something goes wrong:
+
+```python
+from injekta.exceptions import InjectionError, ResolutionError
+```
+
+**Unregistered type:**
+
+```python
+container.resolve(Database)
+# InjectionError: No registration found for 'Database'
+```
+
+**Circular dependency:**
+
+```python
+def get_a(b=Needs(get_b)): ...
+def get_b(a=Needs(get_a)): ...
+
+@inject
+def handler(a=Needs(get_a)): ...
+# ResolutionError: Circular dependency detected for 'get_a'
+```
+
+**Async dependency in sync context:**
+
+```python
+async def get_db(): ...
+
+@inject
+def handler(db=Needs(get_db)): ...
+
+handler()
+# InjectionError: Cannot use async dependency 'get_db' in sync context.
+```
+
+All exceptions inherit from `InjektaError`, so you can catch them all with a single `except InjektaError`.
+
 ## Testing
 
 Use `container.override` to swap dependencies in tests. The original registration is restored automatically when the context exits:
@@ -357,6 +397,8 @@ Or bypass injection entirely by passing dependencies directly:
 def test_handler_directly():
     result = handler(db=FakeDB(), name="John")
 ```
+
+> **Note:** `container.override` is not thread-safe. If you run tests in parallel (e.g. `pytest-xdist`), use a separate container per worker instead of sharing overrides.
 
 ## License
 
