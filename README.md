@@ -10,21 +10,9 @@
 </p>
 
 
-## Table of contents
-
-- [Install](#install)
-- [Quick start](#quick-start)
-- [Why injekta?](#why-injekta)
-- [Four ways to declare dependencies](#four-ways-to-declare-dependencies)
-- [Protocols over inheritance](#protocols-over-inheritance)
-- [Class injection](#class-injection)
-- [Async support](#async-support)
-- [Yield dependencies](#yield-dependencies)
-- [Nested dependencies](#nested-dependencies)
-- [Scoping and lifecycle](#scoping-and-lifecycle)
-- [Mixing styles](#mixing-styles)
-- [Testing](#testing)
-- [License](#license)
+<p align="center">
+    <a href="#quick-start">Getting Started</a> · <a href="#four-ways-to-declare-dependencies">Features</a> · <a href="#scoping-and-lifecycle">Lifecycle</a> · <a href="#testing">Testing</a> · <a href="#license">License</a>
+</p>
 
 ## Install
 
