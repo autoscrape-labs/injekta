@@ -1,0 +1,57 @@
+[tool.poetry]
+name = "injecta"
+version = "0.1.0"
+description = "A lightweight, type-safe dependency injection library inspired by FastAPI's Depends."
+authors = ["Thalison Fernandes <thalissfernandes99@gmail.com>"]
+readme = "README.md"
+packages = [
+    {include = "injecta"}
+]
+include = ["injecta/py.typed"]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.9"
+pytest = "^8.3"
+taskipy = "^1.14"
+pytest-asyncio = "^0.25"
+pytest-cov = "^6.0"
+mypy = "^1.14"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+preview = true
+select = ['I', 'F', 'E', 'W', 'PL', 'PT']
+ignore = ['PLR0913', 'PLR0917']
+
+[tool.ruff.format]
+preview = true
+quote-style = 'single'
+
+[tool.pytest.ini_options]
+pythonpath = "."
+addopts = '-p no:warnings'
+asyncio_mode = 'strict'
+
+[tool.taskipy.tasks]
+lint = 'ruff check injecta/ tests/'
+format = 'ruff check injecta/ tests/ --fix; ruff format injecta/ tests/'
+test = 'pytest -s -x --cov=injecta -vv'
+post_test = 'coverage html'
+typecheck = 'mypy injecta/'
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+exclude = [
+    "tests/",
+]
