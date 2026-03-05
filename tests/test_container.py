@@ -165,6 +165,79 @@ class TestContainerInjectSync:
         assert config_result == {'debug': True}
 
 
+class TestContainerInjectInit:
+    def test_injects_into_init(self) -> None:
+        container = Container()
+        db = FakeDB()
+        container.register(Database, db)
+
+        class UserService:
+            @inject
+            def __init__(self, db: Annotated[Database, container.Needs(Database)]):
+                self.db = db
+
+        service = UserService()
+
+        assert service.db is db
+
+    def test_injects_multiple_deps_into_init(self) -> None:
+        container = Container()
+        db = FakeDB()
+        logger = FakeLogger()
+        container.register(Database, db)
+        container.register(Logger, logger)
+
+        class UserService:
+            @inject
+            def __init__(
+                self,
+                db: Annotated[Database, container.Needs(Database)],
+                logger: Annotated[Logger, container.Needs(Logger)],
+            ):
+                self.db = db
+                self.logger = logger
+
+        service = UserService()
+
+        assert service.db is db
+        assert service.logger is logger
+
+    def test_init_with_explicit_kwarg_override(self) -> None:
+        container = Container()
+        container.register(Database, FakeDB())
+
+        custom_db = FakeDB()
+
+        class UserService:
+            @inject
+            def __init__(self, db: Annotated[Database, container.Needs(Database)]):
+                self.db = db
+
+        service = UserService(db=custom_db)
+
+        assert service.db is custom_db
+
+    def test_init_with_regular_params_alongside_injection(self) -> None:
+        container = Container()
+        db = FakeDB()
+        container.register(Database, db)
+
+        class UserService:
+            @inject
+            def __init__(
+                self,
+                db: Annotated[Database, container.Needs(Database)],
+                name: str,
+            ):
+                self.db = db
+                self.name = name
+
+        service = UserService(name='test')
+
+        assert service.db is db
+        assert service.name == 'test'
+
+
 class TestContainerInjectAsync:
     @pytest.mark.asyncio
     async def test_injects_registered_type(self) -> None:
