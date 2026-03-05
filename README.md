@@ -404,7 +404,9 @@ def test_handler_directly():
     result = handler(db=FakeDB(), name="John")
 ```
 
-> **Note:** `container.override` is not thread-safe. If you run tests in parallel (e.g. `pytest-xdist`), use a separate container per worker instead of sharing overrides.
+## Thread safety
+
+The `Container` is fully thread-safe. All operations (`register`, `resolve`, `override`) are protected by an internal lock, so it's safe to use a single container across multiple threads in any server model (Gunicorn, Uvicorn, threaded servers).
 
 ## License
 

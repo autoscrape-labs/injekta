@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import threading
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from typing import Any, TypeVar
@@ -40,6 +41,7 @@ class Container:
     """
 
     def __init__(self) -> None:
+        self._lock = threading.RLock()
         self._singletons: dict[type[Any], Any] = {}
         self._factories: dict[type[Any], Callable[..., Any]] = {}
 
@@ -55,10 +57,11 @@ class Container:
             implementation: A concrete instance (singleton), class (factory),
                 or callable (factory).
         """
-        if isinstance(implementation, type) or inspect.isfunction(implementation):
-            self._factories[protocol] = implementation
-            return
-        self._singletons[protocol] = implementation
+        with self._lock:
+            if isinstance(implementation, type) or inspect.isfunction(implementation):
+                self._factories[protocol] = implementation
+                return
+            self._singletons[protocol] = implementation
 
     def resolve(self, protocol: type[T]) -> T:
         """Resolve a dependency by its registered type.
@@ -72,13 +75,14 @@ class Container:
         Raises:
             InjectionError: If no registration exists for the type.
         """
-        if protocol in self._singletons:
-            return self._singletons[protocol]  # type: ignore[no-any-return]
+        with self._lock:
+            if protocol in self._singletons:
+                return self._singletons[protocol]  # type: ignore[no-any-return]
 
-        if protocol in self._factories:
-            return self._factories[protocol]()  # type: ignore[no-any-return]
+            if protocol in self._factories:
+                return self._factories[protocol]()  # type: ignore[no-any-return]
 
-        raise InjectionError(f"No registration found for '{protocol.__name__}'")
+            raise InjectionError(f"No registration found for '{protocol.__name__}'")
 
     def Needs(self, protocol: type[T]) -> NeedsMarker[T]:  # noqa: N802
         """Create a `Needs` marker bound to this container.
@@ -123,22 +127,24 @@ class Container:
             # original registration restored
             ```
         """
-        had_singleton = protocol in self._singletons
-        had_factory = protocol in self._factories
-        prev_singleton = self._singletons.get(protocol)
-        prev_factory = self._factories.get(protocol)
+        with self._lock:
+            had_singleton = protocol in self._singletons
+            had_factory = protocol in self._factories
+            prev_singleton = self._singletons.get(protocol)
+            prev_factory = self._factories.get(protocol)
 
-        self._singletons.pop(protocol, None)
-        self._factories.pop(protocol, None)
-        self.register(protocol, implementation)
+            self._singletons.pop(protocol, None)
+            self._factories.pop(protocol, None)
+            self.register(protocol, implementation)
 
         try:
             yield
         finally:
-            self._singletons.pop(protocol, None)
-            self._factories.pop(protocol, None)
+            with self._lock:
+                self._singletons.pop(protocol, None)
+                self._factories.pop(protocol, None)
 
-            if had_singleton:
-                self._singletons[protocol] = prev_singleton
-            if had_factory and prev_factory is not None:
-                self._factories[protocol] = prev_factory
+                if had_singleton:
+                    self._singletons[protocol] = prev_singleton
+                if had_factory and prev_factory is not None:
+                    self._factories[protocol] = prev_factory
