@@ -184,6 +184,56 @@ class TestInjectYieldSync:
         assert cleanup_called
 
 
+    def test_teardown_runs_in_reverse_order(self) -> None:
+        events: list[str] = []
+
+        def get_a() -> Generator[str]:
+            events.append('setup_a')
+            yield 'a'
+            events.append('teardown_a')
+
+        def get_b() -> Generator[str]:
+            events.append('setup_b')
+            yield 'b'
+            events.append('teardown_b')
+
+        @inject
+        def handler(a: str = Needs(get_a), b: str = Needs(get_b)) -> str:
+            events.append('handler')
+            return f'{a}+{b}'
+
+        result = handler()
+
+        assert result == 'a+b'
+        assert events == ['setup_a', 'setup_b', 'handler', 'teardown_b', 'teardown_a']
+
+    def test_diamond_yield_dependency_runs_once(self) -> None:
+        call_count = 0
+        cleanup_count = 0
+
+        def get_config() -> Generator[dict[str, bool]]:
+            nonlocal call_count, cleanup_count
+            call_count += 1
+            yield {'debug': True}
+            cleanup_count += 1
+
+        def get_db(config: dict[str, bool] = Needs(get_config)) -> str:
+            return 'db'
+
+        def get_auth(config: dict[str, bool] = Needs(get_config)) -> str:
+            return 'auth'
+
+        @inject
+        def handler(db: str = Needs(get_db), auth: str = Needs(get_auth)) -> tuple[str, str]:
+            return db, auth
+
+        result = handler()
+
+        assert result == ('db', 'auth')
+        assert call_count == 1
+        assert cleanup_count == 1
+
+
 class TestInjectYieldAsync:
     @pytest.mark.asyncio
     async def test_async_yield_dependency(self) -> None:
