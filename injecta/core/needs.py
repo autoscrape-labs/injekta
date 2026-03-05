@@ -1,12 +1,14 @@
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Generic, TypeVar
+
+T = TypeVar('T')
 
 
-class Needs:
+class Needs(Generic[T]):
     """Marker that declares a function parameter as a dependency to be injected.
 
-    Used as a default value in function signatures to indicate that the parameter
-    should be resolved automatically by the `@inject` decorator.
+    The return type of the dependency callable is preserved through the generic
+    parameter `T`, enabling full type inference without explicit annotations.
 
     Args:
         dependency: The callable that provides the dependency value.
@@ -18,14 +20,14 @@ class Needs:
             return Database()
 
         @inject
-        def handler(db: Database = Needs(get_db)):
+        def handler(db=Needs(get_db)):  # db is inferred as Database
             ...
         ```
     """
 
     __slots__ = ('dependency', 'use_cache')
 
-    def __init__(self, dependency: Callable[..., Any], *, use_cache: bool = True) -> None:
+    def __init__(self, dependency: Callable[..., T], *, use_cache: bool = True) -> None:
         self.dependency = dependency
         self.use_cache = use_cache
 
