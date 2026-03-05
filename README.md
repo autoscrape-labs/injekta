@@ -6,7 +6,7 @@
     <img src="https://github.com/autoscrape-labs/injekta/actions/workflows/ci.yml/badge.svg" alt="Tests">
     <img src="https://github.com/autoscrape-labs/injekta/actions/workflows/lint.yml/badge.svg" alt="Ruff">
     <img src="https://github.com/autoscrape-labs/injekta/actions/workflows/typecheck.yml/badge.svg" alt="MyPy">
-    <img src="https://img.shields.io/badge/python-%3E%3D3.12-blue" alt="Python >= 3.12">
+    <img src="https://img.shields.io/badge/python-%3E%3D3.10-blue" alt="Python >= 3.10">
 </p>
 
 
