@@ -48,7 +48,7 @@ def inject(func: Callable[P, Any]) -> Callable[P, Any]:
             async with AsyncExitStack() as exit_stack:
                 dep_values = await solve_dependencies(dependant, _exit_stack=exit_stack)
                 for key, value in dep_values.items():
-                    kwargs.setdefault(key, value)  # type: ignore[union-attr]
+                    kwargs.setdefault(key, value)
                 return await func(*args, **kwargs)
 
         return async_wrapper
@@ -58,7 +58,7 @@ def inject(func: Callable[P, Any]) -> Callable[P, Any]:
         with ExitStack() as exit_stack:
             dep_values = solve_dependencies_sync(dependant, _exit_stack=exit_stack)
             for key, value in dep_values.items():
-                kwargs.setdefault(key, value)  # type: ignore[union-attr]
+                kwargs.setdefault(key, value)
             return func(*args, **kwargs)
 
     return sync_wrapper

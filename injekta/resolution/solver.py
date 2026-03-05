@@ -79,7 +79,7 @@ def solve_dependencies_sync(
         if inspect.iscoroutinefunction(sub_dep.call) or inspect.isasyncgenfunction(sub_dep.call):
             raise InjectionError(
                 f"Cannot use async dependency '{sub_dep.call.__name__}' in sync context. "
-                f"Use an async function with @inject instead."
+                f'Use an async function with @inject instead.'
             )
 
         if sub_dep.call in _cache:
@@ -95,7 +95,9 @@ def solve_dependencies_sync(
 
 
 async def _execute(
-    call: Callable[..., Any], kwargs: dict[str, Any], exit_stack: AsyncExitStack,
+    call: Callable[..., Any],
+    kwargs: dict[str, Any],
+    exit_stack: AsyncExitStack,
 ) -> Any:
     if inspect.isasyncgenfunction(call):
         return await exit_stack.enter_async_context(_async_gen_to_cm(call, kwargs))
@@ -107,7 +109,9 @@ async def _execute(
 
 
 def _execute_sync(
-    call: Callable[..., Any], kwargs: dict[str, Any], exit_stack: ExitStack,
+    call: Callable[..., Any],
+    kwargs: dict[str, Any],
+    exit_stack: ExitStack,
 ) -> Any:
     if inspect.isgeneratorfunction(call):
         return exit_stack.enter_context(_gen_to_cm(call, kwargs))
@@ -117,7 +121,7 @@ def _execute_sync(
 from contextlib import asynccontextmanager, contextmanager  # noqa: E402
 
 
-@contextmanager  # type: ignore[arg-type]
+@contextmanager
 def _gen_to_cm(call: Callable[..., Any], kwargs: dict[str, Any]) -> Any:
     gen = call(**kwargs)
     try:
@@ -129,13 +133,13 @@ def _gen_to_cm(call: Callable[..., Any], kwargs: dict[str, Any]) -> Any:
             pass
 
 
-@asynccontextmanager  # type: ignore[arg-type]
+@asynccontextmanager
 async def _async_gen_to_cm(call: Callable[..., Any], kwargs: dict[str, Any]) -> Any:
     agen = call(**kwargs)
     try:
-        yield await agen.__anext__()
+        yield await anext(agen)
     finally:
         try:
-            await agen.__anext__()
+            await anext(agen)
         except StopAsyncIteration:
             pass

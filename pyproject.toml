@@ -31,7 +31,7 @@ target-version = "py312"
 [tool.ruff.lint]
 preview = true
 select = ['I', 'F', 'E', 'W', 'PL', 'PT']
-ignore = ['PLR0913', 'PLR0917']
+exclude = ['tests/']
 
 [tool.ruff.format]
 preview = true
@@ -43,8 +43,8 @@ addopts = '-p no:warnings'
 asyncio_mode = 'strict'
 
 [tool.taskipy.tasks]
-lint = 'ruff check injekta/ tests/'
-format = 'ruff check injekta/ tests/ --fix; ruff format injekta/ tests/'
+lint = 'ruff check injekta/'
+format = 'ruff check injekta/ --fix; ruff format injekta/'
 test = 'pytest -s -x --cov=injekta -vv'
 post_test = 'coverage html'
 typecheck = 'mypy injekta/'

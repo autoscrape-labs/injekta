@@ -36,6 +36,7 @@ class Container:
         handler(name="John")  # db and logger resolved from container
         ```
     """
+
     def __init__(self) -> None:
         self._singletons: dict[type[Any], Any] = {}
         self._factories: dict[type[Any], Callable[..., Any]] = {}
@@ -70,10 +71,10 @@ class Container:
             InjectionError: If no registration exists for the type.
         """
         if protocol in self._singletons:
-            return self._singletons[protocol]  # type: ignore[return-value]
+            return self._singletons[protocol]  # type: ignore[no-any-return]
 
         if protocol in self._factories:
-            return self._factories[protocol]()  # type: ignore[return-value]
+            return self._factories[protocol]()  # type: ignore[no-any-return]
 
         raise InjectionError(f"No registration found for '{protocol.__name__}'")
 
@@ -100,7 +101,9 @@ class Container:
 
     @contextmanager
     def override(
-        self, protocol: type[T], implementation: T | type[T] | Callable[..., T],
+        self,
+        protocol: type[T],
+        implementation: T | type[T] | Callable[..., T],
     ) -> Generator[None]:
         """Temporarily replace a registration for the duration of the context.
 
@@ -135,5 +138,5 @@ class Container:
 
             if had_singleton:
                 self._singletons[protocol] = prev_singleton
-            if had_factory:
+            if had_factory and prev_factory is not None:
                 self._factories[protocol] = prev_factory
