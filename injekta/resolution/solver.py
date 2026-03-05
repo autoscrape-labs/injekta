@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable
-from contextlib import AsyncExitStack, ExitStack
+from contextlib import AsyncExitStack, ExitStack, asynccontextmanager, contextmanager
 from typing import Any
 
 from injekta.core.models import Dependant
@@ -118,9 +118,6 @@ def _execute_sync(
     if inspect.isgeneratorfunction(call):
         return exit_stack.enter_context(_gen_to_cm(call, kwargs))
     return call(**kwargs)
-
-
-from contextlib import asynccontextmanager, contextmanager  # noqa: E402
 
 
 @contextmanager
