@@ -1,5 +1,5 @@
 <h1 align="center">Injekta</h1>
-<p align="center">Lightweight, type-safe dependency injection for Python. One decorator, zero dependencies, full type inference. Python 3.12+</p>
+<p align="center"><i>Lightweight, type-safe dependency injection for Python. One decorator, zero dependencies, full type inference</i></p>
 
 <p align="center">
     <a href="https://codecov.io/gh/autoscrape-labs/injekta"><img src="https://codecov.io/gh/autoscrape-labs/injekta/graph/badge.svg" alt="Codecov"></a>
