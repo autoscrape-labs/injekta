@@ -175,6 +175,27 @@ async def handler(db: Annotated[Database, Needs(get_db)]):
     await db.fetch("SELECT * FROM users")
 ```
 
+Async factories work with `Container` too. Register an `async def` and use it from an async function:
+
+```python
+async def make_db() -> Database:
+    db = PostgresDB(os.environ["DATABASE_URL"])
+    await db.connect()
+    return db
+
+container.register(Database, make_db)
+
+@inject
+async def handler(db: Annotated[Database, container.Needs(Database)]):
+    await db.fetch("SELECT * FROM users")
+```
+
+You can also resolve async factories directly with `resolve_async()`:
+
+```python
+db = await container.resolve_async(Database)
+```
+
 ## Yield dependencies
 
 Dependencies that need cleanup (database connections, HTTP sessions, file handles) can use `yield` instead of `return`. Code after `yield` runs automatically when the function returns:
@@ -290,6 +311,7 @@ graph TD
 | An **instance** | Singleton. Same object returned every time. | `container.register(Database, PostgresDB())` |
 | A **class** | Factory. New instance created on each resolution. | `container.register(Database, PostgresDB)` |
 | A **function/lambda** | Factory. Called on each resolution. | `container.register(Database, lambda: PostgresDB("url"))` |
+| An **async function** | Async factory. Resolved via `resolve_async()` or `@inject` on async functions. | `container.register(Database, make_db)` |
 
 ```python
 container = Container()
@@ -311,6 +333,14 @@ def make_cache() -> RedisCache:
     return cache
 
 container.register(Cache, make_cache)
+
+# Async factory: for dependencies that need async setup
+async def make_db() -> Database:
+    db = PostgresDB(os.environ["DATABASE_URL"])
+    await db.connect()
+    return db
+
+container.register(Database, make_db)
 ```
 
 Factories can also be decorated with `@inject` to receive their own dependencies:
@@ -348,7 +378,7 @@ injekta raises clear, specific exceptions when something goes wrong:
 | Exception | When | Phase |
 |---|---|---|
 | `ResolutionError` | Circular dependency, invalid signature | Decoration time (`@inject`) |
-| `InjectionError` | Unregistered type, async dep in sync context | Call time (function execution) |
+| `InjectionError` | Unregistered type, async dep in sync context, async factory resolved synchronously | Call time (function execution) |
 | `InjektaError` | Base class for all injekta errors | Catch-all |
 
 ```python
@@ -383,6 +413,17 @@ def handler(db=Needs(get_db)): ...
 
 handler()
 # InjectionError: Cannot use async dependency 'get_db' in sync context.
+```
+
+**Async factory resolved synchronously:**
+
+```python
+async def make_db(): ...
+container.register(Database, make_db)
+
+container.resolve(Database)
+# InjectionError: Cannot resolve async factory for 'Database' synchronously.
+# Use resolve_async() or an async context with @inject.
 ```
 
 All exceptions inherit from `InjektaError`, so you can catch them all with a single `except InjektaError`.
