@@ -11,6 +11,7 @@ One decorator, zero dependencies, full type inference. Python 3.12+.
 - [Protocols over inheritance](#protocols-over-inheritance)
 - [Class injection](#class-injection)
 - [Async support](#async-support)
+- [Yield dependencies](#yield-dependencies)
 - [Nested dependencies](#nested-dependencies)
 - [Scoping and lifecycle](#scoping-and-lifecycle)
 - [Mixing styles](#mixing-styles)
@@ -177,6 +178,37 @@ async def get_db() -> Database:
 async def handler(db: Annotated[Database, Needs(get_db)]):
     await db.fetch("SELECT * FROM users")
 ```
+
+## Yield dependencies
+
+Dependencies that need cleanup (database connections, HTTP sessions, file handles) can use `yield` instead of `return`. Code after `yield` runs automatically when the function returns:
+
+```python
+def get_db() -> Generator[Database]:
+    db = PostgresDB(os.environ["DATABASE_URL"])
+    db.connect()
+    yield db
+    db.close()  # runs after handler returns
+
+@inject
+def handler(db: Database = Needs(get_db)):
+    db.execute("INSERT INTO users ...")
+```
+
+Async generators work the same way:
+
+```python
+async def get_session() -> AsyncGenerator[ClientSession]:
+    session = ClientSession()
+    yield session
+    await session.close()
+
+@inject
+async def handler(session: Annotated[ClientSession, Needs(get_session)]):
+    await session.get("https://api.example.com")
+```
+
+Cleanup runs even if the function raises an exception.
 
 ## Nested dependencies
 
