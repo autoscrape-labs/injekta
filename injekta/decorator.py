@@ -42,6 +42,7 @@ def inject(func: Callable[P, Any]) -> Callable[P, Any]:
         ```
     """
     dependant = resolve_dependencies(func)
+    sig = inspect.signature(func)
 
     if inspect.iscoroutinefunction(func):
 
@@ -49,8 +50,10 @@ def inject(func: Callable[P, Any]) -> Callable[P, Any]:
         async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
             async with AsyncExitStack() as exit_stack:
                 dep_values = await solve_dependencies(dependant, _exit_stack=exit_stack)
+                bound = sig.bind_partial(*args, **kwargs)
                 for key, value in dep_values.items():
-                    kwargs.setdefault(key, value)
+                    if key not in bound.arguments:
+                        kwargs[key] = value
                 return await func(*args, **kwargs)
 
         return async_wrapper
@@ -59,8 +62,10 @@ def inject(func: Callable[P, Any]) -> Callable[P, Any]:
     def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
         with ExitStack() as exit_stack:
             dep_values = solve_dependencies_sync(dependant, _exit_stack=exit_stack)
+            bound = sig.bind_partial(*args, **kwargs)
             for key, value in dep_values.items():
-                kwargs.setdefault(key, value)
+                if key not in bound.arguments:
+                    kwargs[key] = value
             return func(*args, **kwargs)
 
     return sync_wrapper

@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator, Generator
+from typing import Annotated
 
 import pytest
 
@@ -71,6 +72,108 @@ class TestInjectSync:
         with pytest.raises(InjectionError):
             handler()
 
+    def test_positional_arg_overrides_injection(self) -> None:
+        custom = {'connection': 'custom'}
+
+        @inject
+        def handler(db: dict[str, str] = Needs(_get_db)) -> dict[str, str]:
+            return db
+
+        result = handler(custom)
+
+        assert result == custom
+
+    def test_positional_args_with_mixed_deps_and_regular_params(self) -> None:
+        @inject
+        def handler(
+            db: dict[str, str] = Needs(_get_db),
+            config: dict[str, bool] = Needs(_get_config),
+            name: str = 'default',
+        ) -> tuple[dict[str, str], dict[str, bool], str]:
+            return db, config, name
+
+        custom_db = {'connection': 'positional'}
+        result = handler(custom_db)
+
+        assert result == (custom_db, {'debug': True}, 'default')
+
+    def test_all_deps_passed_positionally_skips_injection(self) -> None:
+        @inject
+        def handler(
+            db: dict[str, str] = Needs(_get_db),
+            config: dict[str, bool] = Needs(_get_config),
+        ) -> tuple[dict[str, str], dict[str, bool]]:
+            return db, config
+
+        custom_db = {'connection': 'pos_db'}
+        custom_config = {'debug': False}
+        result = handler(custom_db, custom_config)
+
+        assert result == (custom_db, custom_config)
+
+    def test_annotated_positional_arg_overrides_injection(self) -> None:
+        custom = {'connection': 'custom'}
+
+        @inject
+        def handler(db: Annotated[dict[str, str], Needs(_get_db)]) -> dict[str, str]:
+            return db
+
+        result = handler(custom)
+
+        assert result == custom
+
+    def test_annotated_positional_with_mixed_deps(self) -> None:
+        @inject
+        def handler(
+            db: Annotated[dict[str, str], Needs(_get_db)],
+            config: Annotated[dict[str, bool], Needs(_get_config)],
+            name: str = 'default',
+        ) -> tuple[dict[str, str], dict[str, bool], str]:
+            return db, config, name
+
+        custom_db = {'connection': 'positional'}
+        result = handler(custom_db)
+
+        assert result == (custom_db, {'debug': True}, 'default')
+
+    def test_annotated_all_deps_passed_positionally(self) -> None:
+        @inject
+        def handler(
+            db: Annotated[dict[str, str], Needs(_get_db)],
+            config: Annotated[dict[str, bool], Needs(_get_config)],
+        ) -> tuple[dict[str, str], dict[str, bool]]:
+            return db, config
+
+        custom_db = {'connection': 'pos_db'}
+        custom_config = {'debug': False}
+        result = handler(custom_db, custom_config)
+
+        assert result == (custom_db, custom_config)
+
+    def test_annotated_kwarg_overrides_injection(self) -> None:
+        custom = {'connection': 'kwarg'}
+
+        @inject
+        def handler(db: Annotated[dict[str, str], Needs(_get_db)]) -> dict[str, str]:
+            return db
+
+        result = handler(db=custom)
+
+        assert result == custom
+
+    def test_annotated_mixed_with_default_needs_positional(self) -> None:
+        @inject
+        def handler(
+            db: Annotated[dict[str, str], Needs(_get_db)],
+            config: dict[str, bool] = Needs(_get_config),
+        ) -> tuple[dict[str, str], dict[str, bool]]:
+            return db, config
+
+        custom_db = {'connection': 'positional'}
+        result = handler(custom_db)
+
+        assert result == (custom_db, {'debug': True})
+
 
 class TestInjectAsync:
     @pytest.mark.asyncio
@@ -113,6 +216,60 @@ class TestInjectAsync:
         result = await handler(db=custom)
 
         assert result == custom
+
+    @pytest.mark.asyncio
+    async def test_positional_arg_overrides_async_injection(self) -> None:
+        custom = {'connection': 'positional'}
+
+        @inject
+        async def handler(db: dict[str, str] = Needs(_get_async_db)) -> dict[str, str]:
+            return db
+
+        result = await handler(custom)
+
+        assert result == custom
+
+    @pytest.mark.asyncio
+    async def test_positional_args_with_mixed_deps_async(self) -> None:
+        @inject
+        async def handler(
+            db: dict[str, str] = Needs(_get_async_db),
+            config: dict[str, bool] = Needs(_get_config),
+        ) -> tuple[dict[str, str], dict[str, bool]]:
+            return db, config
+
+        custom_db = {'connection': 'positional'}
+        result = await handler(custom_db)
+
+        assert result == (custom_db, {'debug': True})
+
+    @pytest.mark.asyncio
+    async def test_annotated_positional_arg_overrides_async_injection(self) -> None:
+        custom = {'connection': 'custom'}
+
+        @inject
+        async def handler(
+            db: Annotated[dict[str, str], Needs(_get_async_db)],
+        ) -> dict[str, str]:
+            return db
+
+        result = await handler(custom)
+
+        assert result == custom
+
+    @pytest.mark.asyncio
+    async def test_annotated_positional_with_mixed_deps_async(self) -> None:
+        @inject
+        async def handler(
+            db: Annotated[dict[str, str], Needs(_get_async_db)],
+            config: Annotated[dict[str, bool], Needs(_get_config)],
+        ) -> tuple[dict[str, str], dict[str, bool]]:
+            return db, config
+
+        custom_db = {'connection': 'positional'}
+        result = await handler(custom_db)
+
+        assert result == (custom_db, {'debug': True})
 
 
 class TestInjectYieldSync:
@@ -233,6 +390,45 @@ class TestInjectYieldSync:
         assert cleanup_count == 1
 
 
+    def test_teardown_exception_propagates(self) -> None:
+        def get_db() -> Generator[str]:
+            yield 'db'
+            raise RuntimeError('cleanup failed')
+
+        @inject
+        def handler(db: str = Needs(get_db)) -> str:
+            return db
+
+        with pytest.raises(RuntimeError, match='cleanup failed'):
+            handler()
+
+    def test_multiple_yields_raises(self) -> None:
+        def get_db() -> Generator[str]:
+            yield 'first'
+            yield 'second'
+
+        @inject
+        def handler(db: str = Needs(get_db)) -> str:
+            return db
+
+        with pytest.raises(InjectionError, match='yielded more than once'):
+            handler()
+
+    def test_teardown_exception_with_handler_exception_chains_both(self) -> None:
+        def get_db() -> Generator[str]:
+            yield 'db'
+            raise RuntimeError('cleanup failed')
+
+        @inject
+        def handler(db: str = Needs(get_db)) -> None:
+            raise ValueError('handler failed')
+
+        with pytest.raises(RuntimeError, match='cleanup failed') as exc_info:
+            handler()
+
+        assert isinstance(exc_info.value.__context__, ValueError)
+
+
 class TestInjectYieldAsync:
     @pytest.mark.asyncio
     async def test_async_yield_dependency(self) -> None:
@@ -270,3 +466,57 @@ class TestInjectYieldAsync:
             await handler()
 
         assert cleanup_called
+
+    @pytest.mark.asyncio
+    async def test_async_teardown_exception_propagates(self) -> None:
+        async def get_db() -> AsyncGenerator[str]:
+            yield 'db'
+            raise RuntimeError('async cleanup failed')
+
+        @inject
+        async def handler(db: str = Needs(get_db)) -> str:
+            return db
+
+        with pytest.raises(RuntimeError, match='async cleanup failed'):
+            await handler()
+
+    @pytest.mark.asyncio
+    async def test_async_multiple_yields_raises(self) -> None:
+        async def get_db() -> AsyncGenerator[str]:
+            yield 'first'
+            yield 'second'
+
+        @inject
+        async def handler(db: str = Needs(get_db)) -> str:
+            return db
+
+        with pytest.raises(InjectionError, match='yielded more than once'):
+            await handler()
+
+    @pytest.mark.asyncio
+    async def test_sync_generator_teardown_exception_in_async_context(self) -> None:
+        def get_db() -> Generator[str]:
+            yield 'db'
+            raise RuntimeError('sync cleanup in async')
+
+        @inject
+        async def handler(db: str = Needs(get_db)) -> str:
+            return db
+
+        with pytest.raises(RuntimeError, match='sync cleanup in async'):
+            await handler()
+
+    @pytest.mark.asyncio
+    async def test_async_teardown_exception_with_handler_exception_chains_both(self) -> None:
+        async def get_db() -> AsyncGenerator[str]:
+            yield 'db'
+            raise RuntimeError('cleanup failed')
+
+        @inject
+        async def handler(db: str = Needs(get_db)) -> None:
+            raise ValueError('handler failed')
+
+        with pytest.raises(RuntimeError, match='cleanup failed') as exc_info:
+            await handler()
+
+        assert isinstance(exc_info.value.__context__, ValueError)

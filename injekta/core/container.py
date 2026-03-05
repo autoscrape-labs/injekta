@@ -175,6 +175,12 @@ class Container:
         Restores the original registration (or removes the override if there
         was none) when the context exits. Supports nesting.
 
+        Warning:
+            Designed for **testing only**. In a multi-threaded environment,
+            overrides are visible to all threads sharing this container
+            instance, which can cause unpredictable behavior if used
+            concurrently in production code.
+
         Args:
             protocol: The type to override.
             implementation: The replacement instance, class, or callable.
