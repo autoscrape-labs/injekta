@@ -52,47 +52,6 @@ class TestSolveDependenciesAsync:
         assert values == {'service': {'service': 'api', 'connection': 'db'}}
 
     @pytest.mark.asyncio
-    async def test_caches_dependency_result(self) -> None:
-        call_count = 0
-
-        def counter() -> int:
-            nonlocal call_count
-            call_count += 1
-            return call_count
-
-        def handler(
-            a: int = Needs(counter),
-            b: int = Needs(counter),
-        ) -> None: ...
-
-        dependant = resolve_dependencies(handler)
-        values = await solve_dependencies(dependant)
-
-        assert values['a'] == values['b'] == 1
-        assert call_count == 1
-
-    @pytest.mark.asyncio
-    async def test_skips_cache_when_disabled(self) -> None:
-        call_count = 0
-
-        def counter() -> int:
-            nonlocal call_count
-            call_count += 1
-            return call_count
-
-        def handler(
-            a: int = Needs(counter, use_cache=False),
-            b: int = Needs(counter, use_cache=False),
-        ) -> None: ...
-
-        dependant = resolve_dependencies(handler)
-        values = await solve_dependencies(dependant)
-
-        assert values['a'] == 1
-        assert values['b'] == 2
-        assert call_count == 2
-
-    @pytest.mark.asyncio
     async def test_no_dependencies_returns_empty(self) -> None:
         dependant = Dependant(call=lambda: None)
         values = await solve_dependencies(dependant)
@@ -124,22 +83,3 @@ class TestSolveDependenciesSync:
 
         with pytest.raises(InjectionError, match='async dependency.*sync context'):
             solve_dependencies_sync(dependant)
-
-    def test_caches_sync_dependency(self) -> None:
-        call_count = 0
-
-        def counter() -> int:
-            nonlocal call_count
-            call_count += 1
-            return call_count
-
-        def handler(
-            a: int = Needs(counter),
-            b: int = Needs(counter),
-        ) -> None: ...
-
-        dependant = resolve_dependencies(handler)
-        values = solve_dependencies_sync(dependant)
-
-        assert values['a'] == values['b'] == 1
-        assert call_count == 1

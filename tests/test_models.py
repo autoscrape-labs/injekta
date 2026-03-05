@@ -16,7 +16,6 @@ class TestDependant:
         assert dep.call is _provider
         assert dep.dependencies == []
         assert dep.param_name == ''
-        assert dep.use_cache is True
 
     def test_stores_sub_dependencies(self) -> None:
         sub = Dependant(call=_sub_provider, param_name='count')
@@ -25,8 +24,7 @@ class TestDependant:
         assert len(parent.dependencies) == 1
         assert parent.dependencies[0].call is _sub_provider
 
-    def test_custom_param_name_and_cache(self) -> None:
-        dep = Dependant(call=_provider, param_name='config', use_cache=False)
+    def test_custom_param_name(self) -> None:
+        dep = Dependant(call=_provider, param_name='config')
 
         assert dep.param_name == 'config'
-        assert dep.use_cache is False

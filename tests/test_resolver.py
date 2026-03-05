@@ -70,13 +70,6 @@ class TestResolveDependencies:
         assert len(dependant.dependencies) == 1
         assert dependant.dependencies[0].param_name == 'db'
 
-    def test_preserves_use_cache_flag(self) -> None:
-        def handler(db: dict[str, str] = Needs(_get_db, use_cache=False)) -> None: ...
-
-        dependant = resolve_dependencies(handler)
-
-        assert dependant.dependencies[0].use_cache is False
-
     def test_detects_circular_dependency(self) -> None:
         def dep_a(b: str = Needs(lambda: '')) -> str:  # noqa: E731
             return b
