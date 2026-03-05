@@ -130,6 +130,11 @@ def _gen_to_cm(call: Callable[..., Any], kwargs: dict[str, Any]) -> Any:
             next(gen)
         except StopIteration:
             pass
+        else:
+            raise InjectionError(
+                f"Dependency '{call.__name__}' yielded more than once. "
+                f'Use a single yield to separate setup from teardown.'
+            )
 
 
 @asynccontextmanager
@@ -142,3 +147,8 @@ async def _async_gen_to_cm(call: Callable[..., Any], kwargs: dict[str, Any]) -> 
             await anext(agen)
         except StopAsyncIteration:
             pass
+        else:
+            raise InjectionError(
+                f"Dependency '{call.__name__}' yielded more than once. "
+                f'Use a single yield to separate setup from teardown.'
+            )
