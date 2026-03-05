@@ -1,0 +1,75 @@
+name: Release
+
+on: workflow_dispatch
+
+jobs:
+  version-cz:
+    runs-on: ubuntu-latest
+    name: Bump version
+    outputs:
+      version: ${{ steps.cz.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: cz
+        name: Create bump and changelog
+        uses: commitizen-tools/commitizen-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Print version
+        run: echo "Bumped to version ${{ steps.cz.outputs.version }}"
+
+  version-pyproject:
+    runs-on: ubuntu-latest
+    name: Sync pyproject.toml
+    needs: version-cz
+    outputs:
+      version: ${{ needs.version-cz.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Update version in pyproject.toml
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          poetry version "${{ needs.version-cz.outputs.version }}"
+          git add pyproject.toml
+          git commit -m "chore(project): bump pyproject.toml to ${{ needs.version-cz.outputs.version }}"
+          git pull --rebase
+          git push
+
+      - name: Update poetry.lock
+        continue-on-error: true
+        run: |
+          poetry lock
+          git add poetry.lock
+          git commit -m "chore(project): update poetry.lock"
+          git pull --rebase
+          git push
+
+  release:
+    name: GitHub Release
+    needs: version-pyproject
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          tag_name: ${{ needs.version-pyproject.outputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
