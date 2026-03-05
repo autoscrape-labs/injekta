@@ -1,3 +1,5 @@
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Annotated, Protocol
 
 import pytest
@@ -392,3 +394,94 @@ class TestContainerInjectAsync:
         result = await handler(db=custom_db)
 
         assert result is custom_db
+
+
+class TestContainerThreadSafety:
+    def test_concurrent_resolve_singleton(self) -> None:
+        container = Container()
+        db = FakeDB()
+        container.register(Database, db)
+
+        results: list[object] = []
+        errors: list[Exception] = []
+
+        def resolve_db() -> None:
+            try:
+                results.append(container.resolve(Database))
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=resolve_db) for _ in range(50)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert not errors
+        assert len(results) == 50
+        assert all(r is db for r in results)
+
+    def test_concurrent_resolve_factory(self) -> None:
+        container = Container()
+        container.register(Database, FakeDB)
+
+        with ThreadPoolExecutor(max_workers=10) as pool:
+            futures = [pool.submit(container.resolve, Database) for _ in range(100)]
+            results = [f.result() for f in as_completed(futures)]
+
+        assert len(results) == 100
+        assert all(isinstance(r, FakeDB) for r in results)
+        assert len(set(id(r) for r in results)) > 1
+
+    def test_concurrent_register_and_resolve(self) -> None:
+        container = Container()
+        container.register(Database, FakeDB())
+        barrier = threading.Barrier(20)
+        errors: list[Exception] = []
+
+        def register_worker() -> None:
+            barrier.wait()
+            try:
+                container.register(Database, FakeDB())
+            except Exception as e:
+                errors.append(e)
+
+        def resolve_worker() -> None:
+            barrier.wait()
+            try:
+                container.resolve(Database)
+            except Exception as e:
+                errors.append(e)
+
+        threads = [
+            threading.Thread(target=register_worker if i % 2 == 0 else resolve_worker)
+            for i in range(20)
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert not errors
+
+    def test_concurrent_override(self) -> None:
+        container = Container()
+        original_db = FakeDB()
+        container.register(Database, original_db)
+        errors: list[Exception] = []
+
+        def override_worker(i: int) -> None:
+            try:
+                with container.override(Database, FakeDB()):
+                    result = container.resolve(Database)
+                    assert isinstance(result, FakeDB)
+            except Exception as e:
+                errors.append(e)
+
+        with ThreadPoolExecutor(max_workers=10) as pool:
+            futures = [pool.submit(override_worker, i) for i in range(50)]
+            for f in as_completed(futures):
+                f.result()
+
+        assert not errors
+        assert container.resolve(Database) is original_db
