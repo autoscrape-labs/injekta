@@ -1,3 +1,4 @@
+import inspect
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Annotated, Protocol
@@ -74,6 +75,26 @@ class TestContainerRegister:
         assert isinstance(second, FakeDB)
         assert first is not second
 
+    def test_register_async_function_as_async_factory(self) -> None:
+        container = Container()
+
+        async def make_db() -> FakeDB:
+            return FakeDB()
+
+        container.register(Database, make_db)
+
+        assert inspect.iscoroutinefunction(container.Needs(Database).dependency)
+
+    def test_register_clears_previous_registration(self) -> None:
+        container = Container()
+        container.register(Database, FakeDB())
+
+        container.register(Database, FakeDB)
+
+        first = container.resolve(Database)
+        second = container.resolve(Database)
+        assert first is not second
+
 
 class TestContainerResolve:
     def test_raises_on_unregistered_type(self) -> None:
@@ -88,6 +109,59 @@ class TestContainerResolve:
         container.register(Database, db)
 
         assert container.resolve(Database) is container.resolve(Database)
+
+    def test_raises_on_async_factory_resolved_synchronously(self) -> None:
+        container = Container()
+
+        async def make_db() -> FakeDB:
+            return FakeDB()
+
+        container.register(Database, make_db)
+
+        with pytest.raises(InjectionError, match='Cannot resolve async factory.*synchronously'):
+            container.resolve(Database)
+
+
+class TestContainerResolveAsync:
+    @pytest.mark.asyncio
+    async def test_resolves_async_factory(self) -> None:
+        container = Container()
+        db = FakeDB()
+
+        async def make_db() -> FakeDB:
+            return db
+
+        container.register(Database, make_db)
+
+        result = await container.resolve_async(Database)
+
+        assert result is db
+
+    @pytest.mark.asyncio
+    async def test_resolves_sync_factory(self) -> None:
+        container = Container()
+        container.register(Database, FakeDB)
+
+        result = await container.resolve_async(Database)
+
+        assert isinstance(result, FakeDB)
+
+    @pytest.mark.asyncio
+    async def test_resolves_singleton(self) -> None:
+        container = Container()
+        db = FakeDB()
+        container.register(Database, db)
+
+        result = await container.resolve_async(Database)
+
+        assert result is db
+
+    @pytest.mark.asyncio
+    async def test_raises_on_unregistered_type(self) -> None:
+        container = Container()
+
+        with pytest.raises(InjectionError, match="No registration found for 'Database'"):
+            await container.resolve_async(Database)
 
 
 class TestContainerNeeds:
@@ -108,6 +182,26 @@ class TestContainerNeeds:
         result = needs.dependency()
 
         assert result is db
+
+    def test_needs_wraps_async_resolver_for_async_factory(self) -> None:
+        container = Container()
+
+        async def make_db() -> FakeDB:
+            return FakeDB()
+
+        container.register(Database, make_db)
+
+        needs = container.Needs(Database)
+
+        assert inspect.iscoroutinefunction(needs.dependency)
+
+    def test_needs_wraps_sync_resolver_for_sync_factory(self) -> None:
+        container = Container()
+        container.register(Database, FakeDB)
+
+        needs = container.Needs(Database)
+
+        assert not inspect.iscoroutinefunction(needs.dependency)
 
 
 class TestContainerOverride:
@@ -394,6 +488,180 @@ class TestContainerInjectAsync:
         result = await handler(db=custom_db)
 
         assert result is custom_db
+
+
+class TestContainerAsyncFactory:
+    @pytest.mark.asyncio
+    async def test_injects_async_factory(self) -> None:
+        container = Container()
+        db = FakeDB()
+
+        async def make_db() -> FakeDB:
+            return db
+
+        container.register(Database, make_db)
+
+        @inject
+        async def handler(
+            db: Annotated[Database, container.Needs(Database)],
+        ) -> list[dict[str, str]]:
+            return db.query('SELECT 1')
+
+        assert await handler() == [{'sql': 'SELECT 1'}]
+
+    @pytest.mark.asyncio
+    async def test_async_factory_creates_new_instance_per_resolution(self) -> None:
+        container = Container()
+
+        async def make_db() -> FakeDB:
+            return FakeDB()
+
+        container.register(Database, make_db)
+
+        first = await container.resolve_async(Database)
+        second = await container.resolve_async(Database)
+
+        assert isinstance(first, FakeDB)
+        assert isinstance(second, FakeDB)
+        assert first is not second
+
+    @pytest.mark.asyncio
+    async def test_async_factory_with_multiple_types(self) -> None:
+        container = Container()
+        db = FakeDB()
+        logger = FakeLogger()
+
+        async def make_db() -> FakeDB:
+            return db
+
+        async def make_logger() -> FakeLogger:
+            return logger
+
+        container.register(Database, make_db)
+        container.register(Logger, make_logger)
+
+        @inject
+        async def handler(
+            db: Annotated[Database, container.Needs(Database)],
+            logger: Annotated[Logger, container.Needs(Logger)],
+        ) -> tuple[object, object]:
+            return db, logger
+
+        db_result, logger_result = await handler()
+
+        assert db_result is db
+        assert logger_result is logger
+
+    @pytest.mark.asyncio
+    async def test_async_factory_mixed_with_sync(self) -> None:
+        container = Container()
+        db = FakeDB()
+
+        async def make_db() -> FakeDB:
+            return db
+
+        container.register(Database, make_db)
+        container.register(Logger, FakeLogger)
+
+        @inject
+        async def handler(
+            db: Annotated[Database, container.Needs(Database)],
+            logger: Annotated[Logger, container.Needs(Logger)],
+        ) -> tuple[object, object]:
+            return db, logger
+
+        db_result, logger_result = await handler()
+
+        assert db_result is db
+        assert isinstance(logger_result, FakeLogger)
+
+    def test_async_factory_raises_in_sync_inject(self) -> None:
+        container = Container()
+
+        async def make_db() -> FakeDB:
+            return FakeDB()
+
+        container.register(Database, make_db)
+
+        @inject
+        def handler(
+            db: Annotated[Database, container.Needs(Database)],
+        ) -> object:
+            return db
+
+        with pytest.raises(InjectionError):
+            handler()
+
+    @pytest.mark.asyncio
+    async def test_async_factory_explicit_kwarg_overrides(self) -> None:
+        container = Container()
+
+        async def make_db() -> FakeDB:
+            return FakeDB()
+
+        container.register(Database, make_db)
+        custom_db = FakeDB()
+
+        @inject
+        async def handler(
+            db: Annotated[Database, container.Needs(Database)],
+        ) -> object:
+            return db
+
+        result = await handler(db=custom_db)
+
+        assert result is custom_db
+
+
+class TestContainerOverrideAsync:
+    @pytest.mark.asyncio
+    async def test_override_async_factory_with_singleton(self) -> None:
+        container = Container()
+
+        async def make_db() -> FakeDB:
+            return FakeDB()
+
+        container.register(Database, make_db)
+        override_db = FakeDB()
+
+        with container.override(Database, override_db):
+            assert container.resolve(Database) is override_db
+
+        with pytest.raises(InjectionError, match='Cannot resolve async factory.*synchronously'):
+            container.resolve(Database)
+
+    @pytest.mark.asyncio
+    async def test_override_sync_with_async_factory(self) -> None:
+        container = Container()
+        original_db = FakeDB()
+        container.register(Database, original_db)
+        async_db = FakeDB()
+
+        async def make_override() -> FakeDB:
+            return async_db
+
+        with container.override(Database, make_override):
+            result = await container.resolve_async(Database)
+            assert result is async_db
+
+        assert container.resolve(Database) is original_db
+
+    @pytest.mark.asyncio
+    async def test_override_restores_async_factory(self) -> None:
+        container = Container()
+        original_db = FakeDB()
+
+        async def make_db() -> FakeDB:
+            return original_db
+
+        container.register(Database, make_db)
+        override_db = FakeDB()
+
+        with container.override(Database, override_db):
+            assert container.resolve(Database) is override_db
+
+        result = await container.resolve_async(Database)
+        assert result is original_db
 
 
 class TestContainerThreadSafety:
